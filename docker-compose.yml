@@ -1,42 +1,39 @@
 version: '3.8'
 
 services:
-  # Kafka with KRaft (No Zookeeper!)
+  # ---------------------------
+  # ✅ Kafka (KRaft mode)
+  # ---------------------------
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    hostname: kafka
+    image: apache/kafka:3.7.0
     container_name: kafka
     ports:
       - "9092:9092"
       - "9093:9093"
     environment:
+      # Core KRaft configuration
+      KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_JMX_PORT: 9101
-      KAFKA_JMX_HOSTNAME: localhost
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-    volumes:
-      - kafka_data:/tmp/kraft-combined-logs
-    command: >
-      bash -c "
-      # Format storage if not already formatted
-      kafka-storage format -t MkU3OEVBNTcwNTJENDM2Qk -c /etc/kafka/kraft/server.properties || true
-      # Start Kafka
-      /etc/confluent/docker/run
-      "
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
 
-  # Kafka UI for easy management
+      # Basic configuration
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+    volumes:
+      - ./data:/tmp/kraft-combined-logs
+
+
+  # ---------------------------
+  # ✅ Kafka UI
+  # ---------------------------
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -44,22 +41,13 @@ services:
       - "8080:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     depends_on:
       - kafka
 
-  # Kafka Exporter for Prometheus
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:latest
-    container_name: kafka-exporter
-    ports:
-      - "9308:9308"
-    command:
-      - '--kafka.server=kafka:29092'
-    depends_on:
-      - kafka
-
-  # PostgreSQL for Airflow
+  # ---------------------------
+  # ✅ PostgreSQL for Airflow
+  # ---------------------------
   postgres:
     image: postgres:14
     container_name: postgres
@@ -72,82 +60,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # Redis for Airflow Celery
+  # ---------------------------
+  # ✅ Redis (Celery backend)
+  # ---------------------------
   redis:
     image: redis:7
     container_name: redis
     ports:
       - "6379:6379"
 
-  # Airflow Webserver
-  airflow-webserver:
-    image: apache/airflow:2.7.3-python3.11
-    container_name: airflow-webserver
-    command: webserver
-    ports:
-      - "8081:8080"
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./airflow/config:/opt/airflow/config
-    depends_on:
-      - postgres
-      - redis
-
-  # Airflow Scheduler
-  airflow-scheduler:
-    image: apache/airflow:2.7.3-python3.11
-    container_name: airflow-scheduler
-    command: scheduler
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./airflow/config:/opt/airflow/config
-    depends_on:
-      - postgres
-      - redis
-
-  # Airflow Worker
-  airflow-worker:
-    image: apache/airflow:2.7.3-python3.11
-    container_name: airflow-worker
-    command: celery worker
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./airflow/config:/opt/airflow/config
-    depends_on:
-      - postgres
-      - redis
-
-  # Airflow Init (one-time setup)
+  # ---------------------------
+  # ✅ Airflow Init (run once)
+  # ---------------------------
   airflow-init:
     image: apache/airflow:2.7.3-python3.11
     container_name: airflow-init
@@ -173,12 +97,80 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
-      - ./airflow/config:/opt/airflow/config
     depends_on:
       - postgres
       - redis
 
-  # Elasticsearch
+  # ---------------------------
+  # ✅ Airflow Webserver
+  # ---------------------------
+  airflow-webserver:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres
+      - redis
+
+  # ---------------------------
+  # ✅ Airflow Scheduler
+  # ---------------------------
+  airflow-scheduler:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: airflow-scheduler
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres
+      - redis
+
+  # ---------------------------
+  # ✅ Airflow Worker
+  # ---------------------------
+  airflow-worker:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: airflow-worker
+    command: celery worker
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres
+      - redis
+
+  # ---------------------------
+  # ✅ Elasticsearch
+  # ---------------------------
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
     container_name: elasticsearch
@@ -191,9 +183,11 @@ services:
     volumes:
       - es_data:/usr/share/elasticsearch/data
 
-  # Kibana
+  # ---------------------------
+  # ✅ Kibana
+  # ---------------------------
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.10.0
+    image: docker.elastic.co/kibana/kibana:8.19.4
     container_name: kibana
     ports:
       - "5601:5601"
@@ -202,7 +196,9 @@ services:
     depends_on:
       - elasticsearch
 
-  # Prometheus
+  # ---------------------------
+  # ✅ Prometheus
+  # ---------------------------
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -215,7 +211,9 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
 
-  # Grafana
+  # ---------------------------
+  # ✅ Grafana
+  # ---------------------------
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -229,7 +227,9 @@ services:
     depends_on:
       - prometheus
 
-  # Node.js Application (Producer & Consumer)
+  # ---------------------------
+  # ✅ Node.js App (Kafka + ES)
+  # ---------------------------
   node-app:
     build:
       context: ./node-app
@@ -239,7 +239,7 @@ services:
       - "3001:3001"
       - "3002:3002"
     environment:
-      KAFKA_BROKERS: kafka:29092
+      KAFKA_BROKERS: kafka:9092
       ELASTICSEARCH_HOST: http://elasticsearch:9200
       NODE_ENV: production
     volumes:

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install Node dependencies
+      run: |
+        cd node-app
+        npm ci
+    
+    - name: Run Node tests
+      run: |
+        cd node-app
+        npm test
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python dependencies
+      run: |
+        pip install pytest black flake8
+    
+    - name: Run Python tests
+      run: pytest tests/
+    
+    - name: Lint Python code
+      run: |
+        black --check airflow/dags/
+        flake8 airflow/dags/
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build Docker images
+      run: docker-compose build
+    
+    - name: Test Docker Compose
+      run: |
+        docker-compose up -d
+        sleep 30
+        docker-compose ps
+        docker-compose down

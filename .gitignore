@@ -1,0 +1,47 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.env.local
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# Airflow
+airflow/logs/*
+!airflow/logs/.gitkeep
+airflow.db
+airflow.cfg
+unittests.cfg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Secrets
+.env
+*.pem
+*.key
+secrets/
