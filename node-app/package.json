@@ -1,0 +1,29 @@
+{
+  "name": "kafka-node-app",
+  "version": "1.0.0",
+  "description": "Kafka Producer and Consumer with Node.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "producer": "node producer.js",
+    "consumer": "node consumer.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "kafka",
+    "elasticsearch",
+    "prometheus"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "@elastic/elasticsearch": "^8.10.0",
+    "express": "^4.18.2",
+    "prom-client": "^15.0.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
